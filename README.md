@@ -125,7 +125,6 @@ NB: First install the dependencies for the framework used for backend i.e. Flask
 
 ### What You Do
 
-* Use **React + Vite**
 * Build pages:
 
     * `Dashboard` - main page
@@ -137,15 +136,19 @@ NB: First install the dependencies for the framework used for backend i.e. Flask
 
 ### How To Do It
 
+### Frontend
+
 1. Go to frontend:
 
      ```bash
      cd frontend
+     npm install
+     
      ```
 2. Visit:
 
      ```
-     http://localhost:5173/
+     http://0.0.0.0:8000/
      ```
 3. You’ll see the dashboard.
 
@@ -157,19 +160,18 @@ NB: First install the dependencies for the framework used for backend i.e. Flask
 
 ```bash
 cd backend
-npm install
-npm run dev
+pip install requirements.txt
+python3 app.py
 ```
 
 ### Frontend
 
 ```bash
 cd frontend
-
-
-
-
+npm install
+python -m http.server 8000
 ```
+
 
 ---
 
