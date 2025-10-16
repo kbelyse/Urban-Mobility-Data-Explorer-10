@@ -107,31 +107,3 @@ def summary():
     finally:
         cur.close()
         conn.close()
-
-@bp.route("/top-zones")
-def top_zones():
-    """Return top pickup zones"""
-    params = {}
-    query = build_filtered_query(
-        "SELECT ROUND(pickup_latitude, 2) AS lat, "
-        "ROUND(pickup_longitude, 2) AS lon, "
-        "COUNT(*) AS count "
-        "FROM trips", 
-        params, 
-        include_limit=False
-    )
-    query += " GROUP BY lat, lon ORDER BY count DESC LIMIT 50"
-    
-    conn = connect_db()
-    cur = conn.cursor()
-    try:
-        cur.execute(query, params)
-        rows = cur.fetchall()
-        zones = [
-            {"lat": float(r[0]) if r[0] else 0, "lon": float(r[1]) if r[1] else 0, "count": int(r[2])}
-            for r in rows
-        ]
-        return jsonify(zones)
-    finally:
-        cur.close()
-        conn.close()
