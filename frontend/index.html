@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NYC Taxi Insights Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>NYC Taxi Trip Insights</h1>
+        <p class="header-subtitle">Analyze trip patterns, fares, and peak hours to optimize your Uber experience</p>
+        <div class="header-controls">
+            <button id="refresh-data" class="btn">Refresh Data</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="dashboard-grid">
+            <aside class="sidebar sticky-sidebar">
+                <div class="panel">
+                    <div class="filter-header">
+                        <button id="toggle-filters" class="btn filter-toggle">Filters</button>
+                    </div>
+                    <form id="filter-form" class="filter-form">
+                        <div class="form-group">
+                            <label>Start Date</label>
+                            <input type="date" name="start_date">
+                        </div>
+                        <div class="form-group">
+                            <label>End Date</label>
+                            <input type="date" name="end_date">
+                        </div>
+                        <div class="form-group">
+                            <label>Vendor</label>
+                            <select name="vendor_id">
+                                <option value="">All Vendors</option>
+                                <option value="1">Vendor 1</option>
+                                <option value="2">Vendor 2</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Passengers</label>
+                            <select name="passenger_count">
+                                <option value="">All</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6+</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Rush Hour</label>
+                            <select name="is_rush_hour">
+                                <option value="">All Times</option>
+                                <option value="1">Rush Hour</option>
+                                <option value="0">Non-Rush</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Min Fare Per KM</label>
+                            <input type="number" name="min_fare_per_km" step="0.01" min="0">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn">Apply</button>
+                            <button type="reset" class="btn btn-secondary">Reset</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="panel">
+                    <h3>
+                        Key Insights
+                        <span class="info-icon">
+                            i
+                            <span class="tooltip-text">Practical tips for better Uber availability</span>
+                        </span>
+                    </h3>
+                    <ul id="key-insights" class="insights-list">
+                        <li>Loading insights...</li>
+                    </ul>
+                </div>
+
+                <div class="panel">
+                    <h3>
+                        Longest Trips
+                        <span class="info-icon">
+                            i
+                            <span class="tooltip-text">Check speed for route efficiency</span>
+                        </span>
+                    </h3>
+                    <ul id="top-longest" class="insights-list">
+                        <li>Loading...</li>
+                    </ul>
+                </div>
+            </aside>
+
+            <main class="content">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-icon">0</div>
+                        <div class="metric-label">Total Trips</div>
+                        <div class="metric-value" id="trip-count">0</div>
+                        <div class="metric-subtitle" id="rush-pct">0% rush hour</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">m</div>
+                        <div class="metric-label">Avg Duration</div>
+                        <div class="metric-value" id="avg-duration">0</div>
+                        <div class="metric-subtitle">minutes</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">km/h</div>
+                        <div class="metric-label">Avg Speed</div>
+                        <div class="metric-value" id="avg-speed">0</div>
+                        <div class="metric-subtitle">km/h</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">$</div>
+                        <div class="metric-label">Avg Fare/KM</div>
+                        <div class="metric-value" id="avg-fare">0</div>
+                        <div class="metric-subtitle">per kilometer</div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Trips by Hour</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="hourly-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Passengers Distribution</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="passenger-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Vendor Fare Comparison</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="vendor-pie"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Rush vs Non-Rush Duration</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="rush-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3>Pickup Hotspot Map</h3>
+                    <div id="pickup-map" style="height: 400px; border-radius: 8px;"></div>
+                </div>
+
+                <div class="table-section">
+                    <h3>Trip Data</h3>
+                    
+                    <div id="active-filters" class="active-filters"></div>
+                    
+                    <div class="table-controls">
+                        <input type="text" id="search-list" placeholder="Search trips...">
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Trip ID</th>
+                                    <th>Vendor</th>
+                                    <th>Pickup Time</th>
+                                    <th>Duration</th>
+                                    <th>Passengers</th>
+                                    <th>Speed (km/h)</th>
+                                    <th>Fare/KM</th>
+                                    <th>Rush Hour</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trip-table-body">
+                                <tr><td colspan="8" style="text-align: center; padding: 20px; color: #9ca3af;">Loading trips...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination">
+                        <button id="prev-page" class="btn btn-secondary" disabled>Previous</button>
+                        <span class="page-info" id="page-info">Page 1</span>
+                        <button id="next-page" class="btn btn-secondary">Next</button>
+                    </div>
+                    <div class="zones-section">
+                        <h4>Best Time to Book</h4>
+                        <ul id="zones-list" class="zones-list">
+                            <li>Loading recommendations...</li>
+                        </ul>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <div id="loader" class="loader">Loading data...</div>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
