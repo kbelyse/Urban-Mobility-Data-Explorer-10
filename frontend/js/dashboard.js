@@ -332,8 +332,8 @@
                 const totalCount = summary.trip_count;
 
                 let allTrips = [];
-                const chunkSize = 10000;
-                const targetTrips = 100000;
+                const chunkSize = 8000;
+                const targetTrips = 10000;
                 const maxChunks = Math.ceil(targetTrips / chunkSize);
                 
                 for (let i = 0; i < maxChunks; i++) {
