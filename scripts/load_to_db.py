@@ -9,8 +9,8 @@ SCHEMA_PATH = "../backend/db/schema.sql"
 def connect_db():
     return mysql.connector.connect(
         host="localhost",
-        user="team10",
-        password="Team10",
+        user="team10", # Update this to your mysql username
+        password="Team10", # Update this to your mysql password
         database="trips",
         port=3306,
         auth_plugin='mysql_native_password'

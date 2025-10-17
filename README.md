@@ -5,14 +5,35 @@ You will process the raw dataset, save it in a database, build an API, and displ
 
 ---
 
+## Important Notes
+
+Required Installations:
+
+MySQL (for database; e.g., via XAMPP, brew install mysql on macOS, or Docker).
+Python 3.8+ (with pip).
+Backend dependencies: flask, mysql-connector-python, flask-cors (via pip install -r backend/requirements.txt).
+
+
+## Update Credentials (very important)
+
+Edit `backend/db/connection.py` and `scripts/load_to_db.py`: Change `user="team10"`, `password="Team10"` to your MySQL username/password.
+
+Test connection:
+
+```bash
+    mysql -u your_username -p
+```
+
 ## Project Structure
 
 ```
 urban-mobility-data-explorer-10/
 ├── backend/ 
+├── data/
+├── docs/
 ├── frontend/
-├── README.md
-└── data/
+├── scripts/
+└── README.md/
 ```
 
 ---
@@ -63,7 +84,7 @@ urban-mobility-data-explorer-10/
 
 ### What You Do
 
-* Use **PostgreSQL**
+* Use **MYSQL**
 * Create table `trips` with columns like:
 
     ```sql
@@ -142,7 +163,6 @@ NB: First install the dependencies for the framework used for backend i.e. Flask
 
      ```bash
      cd frontend
-     npm install
      
      ```
 2. Visit:
@@ -168,10 +188,19 @@ python3 app.py
 
 ```bash
 cd frontend
-npm install
 python -m http.server 8000
 ```
 
+## Database Setup: 
+
+Start MySQL server.
+Create database: 
+
+``` bash
+mysql -u your_username -p
+CREATE DATABASE trips;
+
+```
 
 ---
 
@@ -179,18 +208,27 @@ python -m http.server 8000
 
 ```
 backend/
-├── src/
 │   ├── db/connection.py
 │   ├── db/schema.sql
 │   ├── routes/trips.py
 │   └── app.py
 │   └── requirements.txt
+data/
+│   ├── logs/cleaning_issues.csv
+│   ├── processed/trips_cleaned.csv
+│   ├── raw/train.csv
+docs/
+│   ├── documentation
 frontend/
 │   ├── js/dashboard.js
 │   ├── css/styles.css
 │   ├── lib/chat.umd.min.js
 │   ├── pages/details.html
 │   └── index.html
+scripts/
+│   ├── clean_data.py
+│   ├── load_to_db.py
+└── README.md/
 ```
 
 ---
