@@ -11,8 +11,20 @@ Required Installations:
 
 MySQL (for database; e.g., via XAMPP, brew install mysql on macOS, or Docker).
 Python 3.8+ (with pip).
-Backend dependencies: flask, mysql-connector-python, flask-cors (via pip install -r backend/requirements.txt).
+Backend dependencies: flask, mysql-connector-python, flask-cors, werkzeug (via pip install -r /requirements.txt).
 
+## Set Up a Virtual Environment
+
+cd urban-mobility-data-explorer-10
+python3 -m venv venv
+source venv/bin/activate  # Linux/macOS # or: venv\Scripts\activate  # Windows
+
+## Install Dependencies bac
+
+```bash 
+pip install -r requirements.txt 
+
+```
 
 ## Update Credentials (very important)
 
@@ -22,6 +34,35 @@ Test connection:
 
 ```bash
     mysql -u your_username -p
+
+```
+## Setup Summary
+
+### Backend
+
+```bash
+cd backend
+python3 app.py
+
+```
+
+### Frontend
+
+```bash
+cd frontend
+python -m http.server 8000
+
+```
+
+## Database Setup: 
+
+Start MySQL server.
+Create database: 
+
+``` bash
+mysql -u your_username -p
+CREATE DATABASE trips;
+
 ```
 
 ## Project Structure
@@ -37,6 +78,7 @@ urban-mobility-data-explorer-10/
 ```
 
 ---
+
 ## Stage 1: Data Processing and Cleaning
 
 ### What You Do
@@ -55,7 +97,7 @@ urban-mobility-data-explorer-10/
 1. Go to backend:
 
     ```bash
-    cd backend
+    cd scripts
     ```
 
 2. Place your raw dataset at `data/raw/train.csv`.
@@ -63,7 +105,7 @@ urban-mobility-data-explorer-10/
 3. Run the cleaning script:
 
     ```bash
-    python scripts/clean_data.py
+    python clean_data.py
     ```
 
     - This script reads from `data/raw/train.csv`, writes any cleaning issues to `data/logs/cleaning_issues.csv`, and outputs the cleaned data to `data/processed/trips_cleaned.csv`.
@@ -71,7 +113,7 @@ urban-mobility-data-explorer-10/
 4. Load the cleaned data into the database:
 
     ```bash
-    python scripts/load_to_db.py
+    python load_to_db.py
     ```
 
     - This script reads from `data/processed/trips_cleaned.csv` and inserts the records into your database.
@@ -174,36 +216,6 @@ NB: First install the dependencies for the framework used for backend i.e. Flask
 
 ---
 
-## Setup Summary
-
-### Backend
-
-```bash
-cd backend
-pip install requirements.txt
-python3 app.py
-```
-
-### Frontend
-
-```bash
-cd frontend
-python -m http.server 8000
-```
-
-## Database Setup: 
-
-Start MySQL server.
-Create database: 
-
-``` bash
-mysql -u your_username -p
-CREATE DATABASE trips;
-
-```
-
----
-
 ## Folder Guide
 
 ```
@@ -235,6 +247,6 @@ scripts/
 
 ## Demo Video (to include)
 
-
+[System overview](https://youtu.be/-J5N_U-6bj8)
 
 ---
