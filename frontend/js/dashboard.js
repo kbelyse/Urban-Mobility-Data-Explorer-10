@@ -1,378 +1,456 @@
-        const apiBase = 'http://localhost:5000/api/trips';
-        let map;
-        let allTrips = [];
-        let filteredTrips = [];
-        let currentPage = 0;
-        const pageSize = 10;        let chartInstances = {};
+const apiBase = 'http://localhost:5000/api/trips';
+let map;
+let filteredTrips = [];
+let currentPage = 0;
+const pageSize = 10;
+const sampleSize = 10000;
+let chartInstances = {};
+let currentParams = {};
+let totalTripsCount = 0;
 
-        async function fetchData(endpoint, params = {}) {
-            const urlParams = new URLSearchParams(params).toString();
-            const url = `${apiBase}${endpoint}${urlParams ? '?' + urlParams : ''}`;
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return await response.json();
-            } catch (error) {
-                throw error;
-            }
+async function fetchData(endpoint, params) {
+    let urlParams = new URLSearchParams();
+    for (let key in params) {
+        if (params[key] !== undefined && params[key] !== '') {
+            urlParams.append(key, params[key]);
         }
+    }
+    const url = `${apiBase}${endpoint}${urlParams.toString() ? '?' + urlParams : ''}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+    } catch (error) {
+        throw error;
+    }
+}
 
-        const toggleFilters = document.getElementById('toggle-filters');
-        const filterForm = document.getElementById('filter-form');
-        const loader = document.getElementById('loader');
+function setupEventListeners() {
+    const toggleFilters = document.getElementById('toggle-filters');
+    const refreshData = document.getElementById('refresh-data');
+    const prevPage = document.getElementById('prev-page');
+    const nextPage = document.getElementById('next-page');
+    const searchList = document.getElementById('search-list');
 
-        toggleFilters.addEventListener('click', () => {
-            filterForm.classList.toggle('active');
-        });
+    if (toggleFilters) {
+        toggleFilters.onclick = () => {
+            const form = document.getElementById('filter-form');
+            if (form) form.classList.toggle('active');
+        };
+    }
 
-        function updateMetrics() {
-            const total = filteredTrips.length;
-            if (total === 0) {
-                document.getElementById('trip-count').textContent = '0';
-                document.getElementById('avg-duration').textContent = '0';
-                document.getElementById('avg-speed').textContent = '0';
-                document.getElementById('avg-fare').textContent = '0';
-                document.getElementById('rush-pct').textContent = '0%';
-                return;
-            }
-
-            const avgDuration = filteredTrips.reduce((s, t) => s + t.trip_duration, 0) / total / 60;
-            const avgSpeed = filteredTrips.reduce((s, t) => s + t.trip_speed_km_hr, 0) / total;
-            const avgFare = filteredTrips.reduce((s, t) => s + t.fare_per_km, 0) / total;
-            const rushCount = filteredTrips.filter(t => t.is_rush_hour).length;
-            const rushPct = Math.round(rushCount / total * 100);
-
-            document.getElementById('trip-count').textContent = total.toLocaleString();
-            document.getElementById('avg-duration').textContent = Math.round(avgDuration);
-            document.getElementById('avg-speed').textContent = avgSpeed.toFixed(1);
-            document.getElementById('avg-fare').textContent = avgFare.toFixed(2);
-            document.getElementById('rush-pct').textContent = rushPct + '% rush hour';
-        }
-
-        function updateCharts() {
-            const hourlyData = {};
-            for (let i = 0; i < 24; i++) hourlyData[i] = 0;
-            filteredTrips.forEach(t => {
-                const hour = parseInt(t.pickup_datetime.split(' ')[1].split(':')[0]);
-                if (!isNaN(hour)) hourlyData[hour]++;
-            });
-
-            const ctx1 = document.getElementById('hourly-chart').getContext('2d');
-            if (chartInstances.hourly) chartInstances.hourly.destroy();
-            chartInstances.hourly = new Chart(ctx1, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(hourlyData).map(h => h + ':00'),
-                    datasets: [{
-                        label: 'Trips',
-                        data: Object.values(hourlyData),
-                        backgroundColor: '#2563eb',
-                        borderRadius: 4
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-            });
-
-            const passengerData = {};
-            for (let i = 1; i <= 6; i++) passengerData[i] = 0;
-            filteredTrips.forEach(t => {
-                if (t.passenger_count <= 6) passengerData[t.passenger_count]++;
-            });
-
-            const ctx2 = document.getElementById('passenger-chart').getContext('2d');
-            if (chartInstances.passenger) chartInstances.passenger.destroy();
-            chartInstances.passenger = new Chart(ctx2, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(passengerData),
-                    datasets: [{
-                        label: 'Count',
-                        data: Object.values(passengerData),
-                        backgroundColor: '#10b981',
-                        borderRadius: 4
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-            });
-
-            const vendorData = {};
-            filteredTrips.forEach(t => {
-                vendorData[t.vendor_id] = (vendorData[t.vendor_id] || 0) + 1;
-            });
-
-            const ctx3 = document.getElementById('vendor-pie').getContext('2d');
-            if (chartInstances.vendor) chartInstances.vendor.destroy();
-            chartInstances.vendor = new Chart(ctx3, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Vendor 1', 'Vendor 2'],
-                    datasets: [{
-                        data: [vendorData[1] || 0, vendorData[2] || 0],
-                        backgroundColor: ['#2563eb', '#f97316']
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-
-            const rushTrips = filteredTrips.filter(t => t.is_rush_hour);
-            const nonRushTrips = filteredTrips.filter(t => !t.is_rush_hour);
-            const rushAvg = rushTrips.length > 0 ? rushTrips.reduce((s, t) => s + t.trip_duration, 0) / rushTrips.length / 60 : 0;
-            const nonRushAvg = nonRushTrips.length > 0 ? nonRushTrips.reduce((s, t) => s + t.trip_duration, 0) / nonRushTrips.length / 60 : 0;
-
-            const ctx4 = document.getElementById('rush-chart').getContext('2d');
-            if (chartInstances.rush) chartInstances.rush.destroy();
-            chartInstances.rush = new Chart(ctx4, {
-                type: 'bar',
-                data: {
-                    labels: ['Rush Hour', 'Non-Rush'],
-                    datasets: [{
-                        label: 'Avg Duration (min)',
-                        data: [rushAvg, nonRushAvg],
-                        backgroundColor: ['#dc2626', '#10b981']
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-            });
-        }
-
-        function updateTable() {
-            const start = currentPage * pageSize;
-            const end = start + pageSize;
-            const pageTrips = filteredTrips.slice(start, end);
-
-            const tbody = document.getElementById('trip-table-body');
-            tbody.innerHTML = pageTrips.map(t => `
-                <tr>
-                    <td>${t.id}</td>
-                    <td>${t.vendor_id}</td>
-                    <td>${t.pickup_datetime}</td>
-                    <td>${Math.round(t.trip_duration / 60)}m</td>
-                    <td>${t.passenger_count}</td>
-                    <td>${t.trip_speed_km_hr.toFixed(1)}</td>
-                    <td class="${t.fare_per_km > 0.35 ? 'fare-high' : ''}">${t.fare_per_km.toFixed(2)}</td>
-                    <td>${t.is_rush_hour ? '<span class="rush-badge">Yes</span>' : 'No'}</td>
-                </tr>
-            `).join('');
-
-            document.getElementById('page-info').textContent = `Page ${currentPage + 1} of ${Math.ceil(filteredTrips.length / pageSize)}`;
-            document.getElementById('prev-page').disabled = currentPage === 0;
-            document.getElementById('next-page').disabled = end >= filteredTrips.length;
-        }
-
-        function updateInsights() {
-            if (filteredTrips.length === 0) {
-                document.getElementById('key-insights').innerHTML = '<li>No data available</li>';
-                document.getElementById('top-longest').innerHTML = '<li>No data available</li>';
-                document.getElementById('zones-list').innerHTML = '<li>No data available</li>';
-                return;
-            }
-
-            const rushTrips = filteredTrips.filter(t => t.is_rush_hour);
-            const nonRushTrips = filteredTrips.filter(t => !t.is_rush_hour);
-            const rushAvg = rushTrips.length > 0 ? rushTrips.reduce((s, t) => s + t.trip_duration, 0) / rushTrips.length : 0;
-            const nonRushAvg = nonRushTrips.length > 0 ? nonRushTrips.reduce((s, t) => s + t.trip_duration, 0) / nonRushTrips.length : 0;
-            const difference = nonRushAvg > 0 ? Math.round((rushAvg / nonRushAvg - 1) * 100) : 0;
-
-            document.getElementById('key-insights').innerHTML = `
-                <li>Rush hour trips are <strong>${difference}% longer</strong> than non-rush</li>
-                <li>Average speed: <strong>${(filteredTrips.reduce((s, t) => s + t.trip_speed_km_hr, 0) / filteredTrips.length).toFixed(1)} km/h</strong></li>
-                <li>Solo trips: <strong>${Math.round(filteredTrips.filter(t => t.passenger_count === 1).length / filteredTrips.length * 100)}%</strong> of all trips</li>
-            `;
-
-            const longest = [...filteredTrips].sort((a, b) => b.trip_duration - a.trip_duration).slice(0, 3);
-            document.getElementById('top-longest').innerHTML = longest.map(t => 
-                `<li>Trip ${t.id.slice(0, 8)}: ${Math.round(t.trip_duration / 60)}m at ${t.trip_speed_km_hr.toFixed(1)} km/h</li>`
-            ).join('');
-
-            const avgFareRush = rushTrips.length > 0 ? rushTrips.reduce((s, t) => s + t.fare_per_km, 0) / rushTrips.length : 0;
-            const avgFareNonRush = nonRushTrips.length > 0 ? nonRushTrips.reduce((s, t) => s + t.fare_per_km, 0) / nonRushTrips.length : 0;
-
-            document.getElementById('zones-list').innerHTML = `
-                <li>Book <strong>off-peak</strong> to save ~${Math.round((avgFareRush / avgFareNonRush - 1) * 100)}% on fare</li>
-                <li>Early morning (before 6 AM) tends to have <strong>lower fares</strong></li>
-                <li>Weekend trips are typically <strong>faster</strong> than weekday rush</li>
-            `;
-        }
-
-        function updateMap() {
-            if (!map) {
-                map = L.map('pickup-map').setView([40.7128, -74.0060], 12);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(map);
-            }
-
-            map.eachLayer(layer => {
-                if (layer instanceof L.CircleMarker) map.removeLayer(layer);
-            });
-
-            const rushTrips = filteredTrips.filter(t => t.is_rush_hour);
-            const nonRushTrips = filteredTrips.filter(t => !t.is_rush_hour);
-
-            rushTrips.forEach(t => {
-                if (t.pickup_latitude && t.pickup_longitude) {
-                    L.circleMarker([t.pickup_latitude, t.pickup_longitude], {
-                        radius: 5,
-                        fillColor: '#dc2626',
-                        color: '#991b1b',
-                        weight: 1,
-                        opacity: 0.7,
-                        fillOpacity: 0.5
-                    }).bindPopup(`Rush Hour: ${t.pickup_datetime}`).addTo(map);
-                }
-            });
-
-            nonRushTrips.forEach(t => {
-                if (t.pickup_latitude && t.pickup_longitude) {
-                    L.circleMarker([t.pickup_latitude, t.pickup_longitude], {
-                        radius: 5,
-                        fillColor: '#10b981',
-                        color: '#059669',
-                        weight: 1,
-                        opacity: 0.7,
-                        fillOpacity: 0.5
-                    }).bindPopup(`Non-Rush: ${t.pickup_datetime}`).addTo(map);
-                }
-            });
-        }
-
-        function applyFilters() {
-            const formData = new FormData(filterForm);
-            const params = Object.fromEntries(formData);
-            Object.keys(params).forEach(key => !params[key] && delete params[key]);
-
-            filteredTrips = allTrips.filter(trip => {
-                if (params.start_date && trip.pickup_datetime < params.start_date) return false;
-                if (params.end_date && trip.pickup_datetime > params.end_date) return false;
-                if (params.vendor_id && trip.vendor_id !== parseInt(params.vendor_id)) return false;
-                if (params.passenger_count && trip.passenger_count !== parseInt(params.passenger_count)) return false;
-                if (params.is_rush_hour !== '' && String(trip.is_rush_hour ? 1 : 0) !== params.is_rush_hour) return false;
-                if (params.min_fare_per_km && trip.fare_per_km < parseFloat(params.min_fare_per_km)) return false;
-                return true;
-            });
-
-            currentPage = 0;
-            updateDashboard();
-
-            document.getElementById('active-filters').innerHTML = Object.entries(params)
-                .map(([k, v]) => `<span class="filter-chip">${k}: ${v}</span>`)
-                .join('');
-        }
-
-        function updateDashboard() {
-            updateMetrics();
-            updateCharts();
-            updateTable();
-            updateInsights();
-            updateMap();
-        }
-
-        filterForm.addEventListener('submit', (e) => {
-            e.preventDefault();
+    const filterForm = document.getElementById('filter-form');
+    if (filterForm) {
+        filterForm.onsubmit = (event) => {
+            event.preventDefault();
             applyFilters();
-        });
+        };
+        filterForm.onreset = () => {
+            currentParams = {};
+            const activeFilters = document.getElementById('active-filters');
+            if (activeFilters) activeFilters.innerHTML = '';
+            refreshDashboard({});
+        };
+    }
 
-        filterForm.addEventListener('reset', () => {
-            filteredTrips = [...allTrips];
-            currentPage = 0;
-            document.getElementById('active-filters').innerHTML = '';
-            updateDashboard();
-        });
+    if (refreshData) {
+        refreshData.onclick = () => refreshDashboard(currentParams);
+    }
 
-        document.getElementById('refresh-data').addEventListener('click', loadData);
-
-        document.getElementById('prev-page').addEventListener('click', () => {
+    if (prevPage) {
+        prevPage.onclick = async () => {
             if (currentPage > 0) {
                 currentPage--;
-                updateTable();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                await updateTable();
+                window.scrollTo(0, 0);
             }
-        });
+        };
+    }
 
-        document.getElementById('next-page').addEventListener('click', () => {
-            if ((currentPage + 1) * pageSize < filteredTrips.length) {
+    if (nextPage) {
+        nextPage.onclick = async () => {
+            if ((currentPage + 1) * pageSize < totalTripsCount) {
                 currentPage++;
-                updateTable();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                await updateTable();
+                window.scrollTo(0, 0);
             }
-        });
+        };
+    }
 
-        document.getElementById('search-list').addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll('#trip-table-body tr');
-            rows.forEach(row => {
-                row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
-            });
-        });
-
-        document.getElementById('export-csv').addEventListener('click', () => {
-            if (filteredTrips.length === 0) {
-                alert('No data to export');
-                return;
+    if (searchList) {
+        searchList.oninput = (event) => {
+            const term = event.target.value.toLowerCase();
+            const rows = document.getElementsByTagName('tr');
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(term) ? '' : 'none';
             }
+        };
+    }
+}
 
-            let csv = 'ID,Vendor,Pickup,Duration(m),Passengers,Speed,Fare/KM,RushHour\n';
-            filteredTrips.forEach(t => {
-                csv += `${t.id},${t.vendor_id},${t.pickup_datetime},${Math.round(t.trip_duration / 60)},${t.passenger_count},${t.trip_speed_km_hr.toFixed(1)},${t.fare_per_km.toFixed(2)},${t.is_rush_hour ? 'Yes' : 'No'}\n`;
-            });
+function updateMetricsWithSummary(summary) {
+    const tripCountEl = document.getElementById('trip-count');
+    const avgDurationEl = document.getElementById('avg-duration');
+    const avgSpeedEl = document.getElementById('avg-speed');
+    const avgFareEl = document.getElementById('avg-fare');
+    const rushPctEl = document.getElementById('rush-pct');
 
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'taxi_trips.csv';
-            a.click();
-        });
+    if (!tripCountEl || !avgDurationEl || !avgSpeedEl || !avgFareEl || !rushPctEl) {
+        return;
+    }
 
-        async function loadData() {
-            loader.classList.add('active');
-            try {
-                // summary from summary api
-                const summary = await fetchData('/summary', {});
-                const totalCount = summary.trip_count;
+    tripCountEl.textContent = summary.trip_count || 0;
+    avgDurationEl.textContent = Math.round(summary.avg_duration || 0);
+    avgSpeedEl.textContent = (summary.avg_speed || 0).toFixed(1);
+    avgFareEl.textContent = (summary.avg_fare || 0).toFixed(2);
+    rushPctEl.textContent = (summary.rush_pct || 0) + '% rush hour';
+    totalTripsCount = summary.trip_count || 0;
+}
 
-                let allTrips = [];
-                const chunkSize = 8000;
-                const targetTrips = 10000;
-                const maxChunks = Math.ceil(targetTrips / chunkSize);
-                
-                for (let i = 0; i < maxChunks; i++) {
-                    const offset = i * chunkSize;
-                    
-                    const data = await fetchData('', { 
-                        offset: offset, 
-                        limit: chunkSize 
-                    });
-                    
-                    const trips = Array.isArray(data) ? data : data.trips || [];
-                    
-                    if (trips.length === 0) {
-                        break;
-                    }
-                    
-                    allTrips = allTrips.concat(trips);
-                    
-                    // Update dashboard after each chunk, we used this for faster feedback
-                    filteredTrips = [...allTrips];
-                    currentPage = 0;
-                    updateDashboard();
+function updateCharts() {
+    let hourlyData = Array(24).fill(0);
+    for (let trip of filteredTrips) {
+        const timeParts = trip.pickup_datetime.split(' ')[1].split(':');
+        const hour = parseInt(timeParts[0]);
+        if (hour >= 0 && hour < 24) hourlyData[hour]++;
+    }
+
+    const ctx1 = document.getElementById('hourly-chart');
+    if (ctx1) {
+        const chartCtx1 = ctx1.getContext('2d');
+        if (chartInstances.hourly) chartInstances.hourly.destroy();
+        chartInstances.hourly = new Chart(chartCtx1, {
+            type: 'bar',
+            data: {
+                labels: [
+                    '0:00', '1:00', '2:00', '3:00', '4:00', '5:00', '6:00', '7:00',
+                    '8:00', '9:00', '10:00', '11:00', '12:00', '13:00', '14:00',
+                    '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00',
+                    '22:00', '23:00'
+                ],
+                datasets: [{
+                    label: 'Trips',
+                    data: hourlyData,
+                    backgroundColor: '#2563eb',
+                    borderColor: '#1e40af',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'Trips by Hour' }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Hour of Day' } },
+                    y: { title: { display: true, text: 'Number of Trips' } }
                 }
-
-                // Finally store data here
-                allTrips.forEach(t => {
-                    t.is_rush_hour = t.is_rush_hour ? true : false;
-                });
-                
-                filteredTrips = [...allTrips];
-                currentPage = 0;
-                updateDashboard();
-                
-            } catch (error) {
-                document.getElementById('trip-table-body').innerHTML = 
-                    '<tr><td colspan="8">Failed to load data. Error: ' + error.message + '</td></tr>';
-            } finally {
-                loader.classList.remove('active');
             }
-        }
+        });
+    }
 
-        loadData();
+    let passengerData = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    for (let trip of filteredTrips) {
+        let pc = trip.passenger_count;
+        if (pc > 6) pc = 6;
+        if (pc >= 1 && pc <= 6) passengerData[pc]++;
+    }
+
+    const ctx2 = document.getElementById('passenger-chart');
+    if (ctx2) {
+        const chartCtx2 = ctx2.getContext('2d');
+        if (chartInstances.passenger) chartInstances.passenger.destroy();
+        chartInstances.passenger = new Chart(chartCtx2, {
+            type: 'bar',
+            data: {
+                labels: ['1', '2', '3', '4', '5', '6+'],
+                datasets: [{
+                    label: 'Count',
+                    data: [
+                        passengerData[1], passengerData[2], passengerData[3],
+                        passengerData[4], passengerData[5], passengerData[6]
+                    ],
+                    backgroundColor: '#10b981',
+                    borderColor: '#047857',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'Passengers Distribution' }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Passenger Count' } },
+                    y: { title: { display: true, text: 'Number of Trips' } }
+                }
+            }
+        });
+    }
+
+    let vendorData = { 1: 0, 2: 0 };
+    for (let trip of filteredTrips) {
+        const vid = trip.vendor_id;
+        vendorData[vid] = (vendorData[vid] || 0) + 1;
+    }
+
+    const ctx3 = document.getElementById('vendor-pie');
+    if (ctx3) {
+        const chartCtx3 = ctx3.getContext('2d');
+        if (chartInstances.vendor) chartInstances.vendor.destroy();
+        chartInstances.vendor = new Chart(chartCtx3, {
+            type: 'doughnut',
+            data: {
+                labels: ['Vendor 1', 'Vendor 2'],
+                datasets: [{
+                    data: [vendorData[1], vendorData[2]],
+                    backgroundColor: ['#2563eb', '#f97316'],
+                    borderColor: ['#1e40af', '#c2410c'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: 'Vendor Trip Comparison' }
+                }
+            }
+        });
+    }
+
+    let rushSum = 0, rushCount = 0, nonRushSum = 0, nonRushCount = 0;
+    for (let trip of filteredTrips) {
+        if (trip.is_rush_hour) {
+            rushSum += trip.trip_duration;
+            rushCount++;
+        } else {
+            nonRushSum += trip.trip_duration;
+            nonRushCount++;
+        }
+    }
+    const rushAvg = rushCount > 0 ? rushSum / rushCount / 60 : 0;
+    const nonRushAvg = nonRushCount > 0 ? nonRushSum / nonRushCount / 60 : 0;
+
+    const ctx4 = document.getElementById('rush-chart');
+    if (ctx4) {
+        const chartCtx4 = ctx4.getContext('2d');
+        if (chartInstances.rush) chartInstances.rush.destroy();
+        chartInstances.rush = new Chart(chartCtx4, {
+            type: 'bar',
+            data: {
+                labels: ['Rush Hour', 'Non-Rush'],
+                datasets: [{
+                    label: 'Avg Duration (min)',
+                    data: [rushAvg, nonRushAvg],
+                    backgroundColor: ['#dc2626', '#10b981'],
+                    borderColor: ['#991b1b', '#047857'],
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'Rush vs Non-Rush Duration' }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Time Period' } },
+                    y: { title: { display: true, text: 'Average Duration (min)' } }
+                }
+            }
+        });
+    }
+}
+
+async function updateTable() {
+    const tbody = document.getElementById('trip-table-body');
+    if (!tbody) return;
+
+    try {
+        const pageTrips = await fetchData('', { ...currentParams, offset: currentPage * pageSize, limit: pageSize });
+        let html = '';
+        for (let trip of pageTrips) {
+            html += `<tr>
+                <td>${trip.id}</td>
+                <td>${trip.vendor_id}</td>
+                <td>${trip.pickup_datetime}</td>
+                <td>${Math.round(trip.trip_duration / 60)}m</td>
+                <td>${trip.passenger_count}</td>
+                <td>${trip.trip_speed_km_hr.toFixed(1)}</td>
+                <td class="${trip.fare_per_km > 0.35 ? 'fare-high' : ''}">${trip.fare_per_km.toFixed(2)}</td>
+                <td>${trip.is_rush_hour ? '<span class="rush-badge">Yes</span>' : 'No'}</td>
+            </tr>`;
+        }
+        tbody.innerHTML = html || '<tr><td colspan="8">No trips found</td></tr>';
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="8">Failed to load page data. Error: ${error.message}</td></tr>`;
+    }
+
+    const pageInfo = document.getElementById('page-info');
+    if (pageInfo) {
+        const totalPages = Math.ceil(totalTripsCount / pageSize);
+        pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages || 1}`;
+    }
+    const prevPageBtn = document.getElementById('prev-page');
+    const nextPageBtn = document.getElementById('next-page');
+    if (prevPageBtn) prevPageBtn.disabled = currentPage === 0;
+    if (nextPageBtn) nextPageBtn.disabled = (currentPage + 1) * pageSize >= totalTripsCount;
+}
+
+function updateInsights() {
+    const insights = document.getElementById('key-insights');
+    const topLongest = document.getElementById('top-longest');
+    const zonesList = document.getElementById('zones-list');
+
+    if (!insights || !topLongest || !zonesList) return;
+
+    if (!filteredTrips.length) {
+        insights.innerHTML = '<li>No data available</li>';
+        topLongest.innerHTML = '<li>No data available</li>';
+        zonesList.innerHTML = '<li>No data available</li>';
+        return;
+    }
+
+    let rushSum = 0, rushCount = 0, nonRushSum = 0, nonRushCount = 0, soloCount = 0, totalSpeed = 0, rushFareSum = 0, nonRushFareSum = 0;
+    for (let trip of filteredTrips) {
+        if (trip.is_rush_hour) {
+            rushSum += trip.trip_duration;
+            rushCount++;
+            rushFareSum += trip.fare_per_km;
+        } else {
+            nonRushSum += trip.trip_duration;
+            nonRushCount++;
+            nonRushFareSum += trip.fare_per_km;
+        }
+        if (trip.passenger_count === 1) soloCount++;
+        totalSpeed += trip.trip_speed_km_hr;
+    }
+
+    const rushAvg = rushCount > 0 ? rushSum / rushCount : 0;
+    const nonRushAvg = nonRushCount > 0 ? nonRushSum / nonRushCount : 0;
+    const difference = nonRushAvg > 0 ? Math.round((rushAvg / nonRushAvg - 1) * 100) : 0;
+    const avgSpeed = filteredTrips.length > 0 ? totalSpeed / filteredTrips.length : 0;
+    const soloPct = filteredTrips.length > 0 ? Math.round(soloCount / filteredTrips.length * 100) : 0;
+    const avgFareRush = rushCount > 0 ? rushFareSum / rushCount : 0;
+    const avgFareNonRush = nonRushCount > 0 ? nonRushFareSum / nonRushCount : 0;
+    const fareDiff = avgFareNonRush > 0 ? Math.round((avgFareRush / avgFareNonRush - 1) * 100) : 0;
+
+    insights.innerHTML = `
+        <li>Rush hour trips are <strong>${difference}% longer</strong> than non-rush</li>
+        <li>Average speed: <strong>${avgSpeed.toFixed(1)} km/h</strong></li>
+        <li>Solo trips: <strong>${soloPct}%</strong> of all trips</li>`;
+
+    const top3 = filteredTrips.slice().sort((a, b) => b.trip_duration - a.trip_duration).slice(0, 3);
+    let longestHtml = '';
+    for (let trip of top3) {
+        longestHtml += `<li>Trip ${trip.id.substring(0, 8)}: ${Math.round(trip.trip_duration / 60)}m at ${trip.trip_speed_km_hr.toFixed(1)} km/h</li>`;
+    }
+    topLongest.innerHTML = longestHtml || '<li>No data</li>';
+
+    zonesList.innerHTML = `
+        <li>Book <strong>off-peak</strong> to save ~${fareDiff}% on fare</li>
+        <li>Early morning (before 6 AM) tends to have <strong>lower fares</strong></li>
+        <li>Weekend trips are typically <strong>faster</strong> than weekday rush</li>`;
+}
+
+function updateMap() {
+    const mapDiv = document.getElementById('pickup-map');
+    if (!mapDiv) return;
+
+    if (!map) {
+        map = L.map('pickup-map').setView([40.7128, -74.0060], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+    }
+
+    map.eachLayer(layer => {
+        if (layer instanceof L.CircleMarker) map.removeLayer(layer);
+    });
+
+    for (let trip of filteredTrips) {
+        if (trip.pickup_latitude && trip.pickup_longitude) {
+            const color = trip.is_rush_hour ? '#dc2626' : '#10b981';
+            const border = trip.is_rush_hour ? '#991b1b' : '#059669';
+            const popup = trip.is_rush_hour ? `Rush Hour: ${trip.pickup_datetime}` : `Non-Rush: ${trip.pickup_datetime}`;
+            L.circleMarker([trip.pickup_latitude, trip.pickup_longitude], {
+                radius: 5,
+                fillColor: color,
+                color: border,
+                weight: 1,
+                opacity: 0.7,
+                fillOpacity: 0.5
+            }).bindPopup(popup).addTo(map);
+        }
+    }
+}
+
+function applyFilters() {
+    const form = document.getElementById('filter-form'); 
+    if (!form) {
+        console.error('Filter form not found');
+        return;
+    }
+
+    const inputs = form.querySelectorAll('input, select');
+    let params = {};
+
+    inputs.forEach(el => {
+        if (el.value) params[el.name] = el.value;
+    });
+
+    currentParams = params;
+    currentPage = 0;
+
+    const activeFilters = document.getElementById('active-filters');
+    if (activeFilters) {
+        activeFilters.innerHTML = Object.entries(params)
+            .map(([k, v]) => `<span class="filter-chip">${k}: ${v}</span>`)
+            .join('');
+    }
+
+    refreshDashboard(params);
+}
+
+
+
+async function refreshDashboard(params) {
+    const loader = document.getElementById('loader');
+    if (loader) loader.classList.add('active');
+
+    try {
+        const summary = await fetchData('/summary', params);
+        updateMetricsWithSummary(summary);
+
+        const sampleData = await fetchData('', { ...params, offset: 0, limit: sampleSize });
+        filteredTrips = sampleData.map(t => ({ ...t, is_rush_hour: !!t.is_rush_hour }));
+
+        updateCharts();
+        updateInsights();
+        updateMap();
+        await updateTable();
+    } catch (error) {
+        console.error('Error refreshing dashboard:', error);
+        const tbody = document.getElementById('trip-table-body');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="8">Failed to load data. Error: ${error.message}</td></tr>`;
+        }
+    } finally {
+        if (loader) loader.classList.remove('active');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', setupEventListeners);
+document.addEventListener('DOMContentLoaded', () => refreshDashboard({}));
